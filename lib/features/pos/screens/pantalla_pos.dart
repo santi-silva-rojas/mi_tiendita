@@ -1,77 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/providers/pos_provider.dart';
 
-/// Vista principal del Punto de Venta (POS).
-///
-/// Contiene el catálogo de selección rápida a la izquierda
-/// y la gestión de carrito, cantidades y proceso de cobro a la derecha.
-class PantallaPOS extends StatefulWidget {
+/// Vista principal del Punto de Venta (POS) utilizando Provider para gestión de estado.
+class PantallaPOS extends StatelessWidget {
   const PantallaPOS({super.key});
 
-  @override
-  State<PantallaPOS> createState() => _PantallaPOSState();
-}
-
-class _PantallaPOSState extends State<PantallaPOS> {
-  // Lista que almacena los productos añadidos a la venta actual
-  final List<Map<String, dynamic>> _carrito = [];
-
-  /// Agrega un producto al carrito o incrementa su cantidad si ya existe.
-  void _agregarAlCarrito(String nombre, int precio) {
-    setState(() {
-      int index = _carrito.indexWhere((item) => item['nombre'] == nombre);
-
-      if (index != -1) {
-        _carrito[index]['cantidad'] += 1;
-      } else {
-        _carrito.add({'nombre': nombre, 'precio': precio, 'cantidad': 1});
-      }
-    });
-  }
-
-  /// Calcula el total a pagar recorriendo la lista de compras.
-  int get _totalPagar {
-    int total = 0;
-    for (var item in _carrito) {
-      total += (item['precio'] as int) * (item['cantidad'] as int);
-    }
-    return total;
-  }
-
-  /// Elimina un producto del carrito según su índice.
-  void _eliminarDelCarrito(int index) {
-    setState(() {
-      _carrito.removeAt(index);
-    });
-  }
-
-  /// Vacía por completo la lista del carrito actual.
-  void _vaciarCarrito() {
-    setState(() {
-      _carrito.clear();
-    });
-  }
-
-  /// Incrementa en 1 la cantidad de un ítem del carrito.
-  void _aumentarCantidad(int index) {
-    setState(() {
-      _carrito[index]['cantidad'] += 1;
-    });
-  }
-
-  /// Disminuye en 1 la cantidad o elimina el producto si llega a cero.
-  void _disminuirCantidad(int index) {
-    setState(() {
-      if (_carrito[index]['cantidad'] > 1) {
-        _carrito[index]['cantidad'] -= 1;
-      } else {
-        _carrito.removeAt(index);
-      }
-    });
-  }
-
   /// Despliega la ventana emergente para registrar el dinero recibido y dar la devuelta.
-  void _mostrarVentanaCobro() {
-    if (_carrito.isEmpty) {
+  void _mostrarVentanaCobro(BuildContext context) {
+    final posProvider = Provider.of<PosProvider>(context, listen: false);
+
+    if (posProvider.carrito.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -105,7 +44,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'TOTAL: \$$_totalPagar',
+                    'TOTAL: \$${posProvider.totalPagar}',
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -125,7 +64,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                     onChanged: (valor) {
                       int recibido = int.tryParse(valor) ?? 0;
                       setStateModal(() {
-                        cambio = recibido - _totalPagar;
+                        cambio = recibido - posProvider.totalPagar;
                       });
                     },
                   ),
@@ -159,7 +98,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                       ? null
                       : () {
                           Navigator.pop(contextoDialogo);
-                          _vaciarCarrito();
+                          posProvider.vaciarCarrito();
 
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -181,6 +120,9 @@ class _PantallaPOSState extends State<PantallaPOS> {
 
   @override
   Widget build(BuildContext context) {
+    // Escuchamos los cambios en el estado del POS
+    final posProvider = Provider.of<PosProvider>(context);
+
     return Row(
       children: [
         // ==========================================
@@ -218,7 +160,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                 runSpacing: 8.0,
                 children: [
                   ElevatedButton(
-                    onPressed: () => _agregarAlCarrito('Pan Aliñado', 2000),
+                    onPressed: () => posProvider.agregarProducto('Pan Aliñado', 2000),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.black87,
@@ -230,7 +172,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                     child: const Text('🍞 Pan Aliñado\n2.000'),
                   ),
                   ElevatedButton(
-                    onPressed: () => _agregarAlCarrito('Huevo AA', 600),
+                    onPressed: () => posProvider.agregarProducto('Huevo AA', 600),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.black87,
@@ -242,7 +184,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                     child: const Text('🥚 Huevo AA\n600'),
                   ),
                   ElevatedButton(
-                    onPressed: () => _agregarAlCarrito('Gaseosa 1.5L', 5000),
+                    onPressed: () => posProvider.agregarProducto('Gaseosa 1.5L', 5000),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.black87,
@@ -273,15 +215,15 @@ class _PantallaPOSState extends State<PantallaPOS> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      '🛒 Carrito de Compras',
-                      style: TextStyle(
+                    Text(
+                      '🛒 Carrito de Compras (${posProvider.cantidadTotalArticulos})',
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     IconButton(
-                      onPressed: _vaciarCarrito,
+                      onPressed: posProvider.vaciarCarrito,
                       icon: const Icon(
                         Icons.delete_outline,
                         color: Colors.red,
@@ -294,7 +236,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
 
                 // Lista de Productos Agregados
                 Expanded(
-                  child: _carrito.isEmpty
+                  child: posProvider.carrito.isEmpty
                       ? const Center(
                           child: Text(
                             'No hay productos en la venta actual',
@@ -305,9 +247,9 @@ class _PantallaPOSState extends State<PantallaPOS> {
                           ),
                         )
                       : ListView.builder(
-                          itemCount: _carrito.length,
+                          itemCount: posProvider.carrito.length,
                           itemBuilder: (context, index) {
-                            final producto = _carrito[index];
+                            final producto = posProvider.carrito[index];
 
                             return ListTile(
                               leading: CircleAvatar(
@@ -315,13 +257,13 @@ class _PantallaPOSState extends State<PantallaPOS> {
                                 child: Text('${index + 1}'),
                               ),
                               title: Text(
-                                producto['nombre'],
+                                producto.nombre,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               subtitle: Text(
-                                '\$${producto['precio']} x ${producto['cantidad']}',
+                                '\$${producto.precio} x ${producto.cantidad}',
                               ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -331,10 +273,10 @@ class _PantallaPOSState extends State<PantallaPOS> {
                                       Icons.remove_circle_outline,
                                       color: Colors.orange,
                                     ),
-                                    onPressed: () => _disminuirCantidad(index),
+                                    onPressed: () => posProvider.disminuirCantidad(index),
                                   ),
                                   Text(
-                                    '${producto['cantidad']}',
+                                    '${producto.cantidad}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
@@ -345,11 +287,11 @@ class _PantallaPOSState extends State<PantallaPOS> {
                                       Icons.add_circle_outline,
                                       color: Colors.green,
                                     ),
-                                    onPressed: () => _aumentarCantidad(index),
+                                    onPressed: () => posProvider.aumentarCantidad(index),
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    '\$${producto['precio'] * producto['cantidad']}',
+                                    '\$${producto.subtotal}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
@@ -360,7 +302,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                                       Icons.delete,
                                       color: Colors.redAccent,
                                     ),
-                                    onPressed: () => _eliminarDelCarrito(index),
+                                    onPressed: () => posProvider.eliminarProducto(index),
                                   ),
                                 ],
                               ),
@@ -392,7 +334,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                             ),
                           ),
                           Text(
-                            '\$ $_totalPagar',
+                            '\$ ${posProvider.totalPagar}',
                             style: const TextStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.bold,
@@ -402,7 +344,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                         ],
                       ),
                       ElevatedButton.icon(
-                        onPressed: _mostrarVentanaCobro,
+                        onPressed: () => _mostrarVentanaCobro(context),
                         icon: const Icon(Icons.payments),
                         label: const Text(
                           'COBRAR (F5)',

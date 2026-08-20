@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'core/providers/pos_provider.dart';
 import 'core/widgets/menu_lateral.dart';
 import 'features/pos/screens/pantalla_pos.dart';
 import 'features/dashboard/screens/pantalla_dashboard.dart';
@@ -8,7 +11,14 @@ import 'features/arqueo/screens/pantalla_arqueo.dart';
 import 'features/configuracion/screens/pantalla_configuracion.dart';
 
 void main() {
-  runApp(const MiApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => PosProvider()),
+      ],
+      child: const MiApp(),
+    ),
+  );
 }
 
 class MiApp extends StatelessWidget {
@@ -24,7 +34,6 @@ class MiApp extends StatelessWidget {
   }
 }
 
-/// Pantalla principal que sostiene el menú lateral y la vista activa.
 class ContenedorPrincipal extends StatefulWidget {
   const ContenedorPrincipal({super.key});
 
@@ -33,10 +42,8 @@ class ContenedorPrincipal extends StatefulWidget {
 }
 
 class _ContenedorPrincipalState extends State<ContenedorPrincipal> {
-  // Índice para saber qué pantalla mostrar (0: Ventas, 1: Historial, etc.)
   int _indiceSeleccionado = 0;
 
-  // Lista con las 6 vistas principales de la aplicación
   final List<Widget> _pantallas = const [
     PantallaPOS(),
     PantallaDashboard(),
@@ -51,16 +58,14 @@ class _ContenedorPrincipalState extends State<ContenedorPrincipal> {
     return Scaffold(
       body: Row(
         children: [
-          // Menú Lateral Fijo a la izquierda
           MenuLateral(
             indiceSeleccionado: _indiceSeleccionado,
             onOpcionSeleccionada: (nuevoIndice) {
               setState(() {
                 _indiceSeleccionado = nuevoIndice;
-              });
+              }); 
             },
           ),
-          // Vista Central Cambiante
           Expanded(
             child: _pantallas[_indiceSeleccionado],
           ),
