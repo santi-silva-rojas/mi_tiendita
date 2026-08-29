@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'core/providers/pos_provider.dart';
+import 'core/providers/inventario_provider.dart';
 import 'core/widgets/menu_lateral.dart';
 import 'features/pos/screens/pantalla_pos.dart';
 import 'features/dashboard/screens/pantalla_dashboard.dart';
@@ -15,6 +16,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => PosProvider()),
+        ChangeNotifierProvider(create: (_) => InventarioProvider()),
       ],
       child: const MiApp(),
     ),
