@@ -2,23 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/pos_provider.dart';
 import '../../../core/providers/inventario_provider.dart';
+import '../../../core/providers/clientes_provider.dart';
 
-/// Vista principal del Punto de Venta (POS) utilizando Provider para gestión de estado.
 class PantallaPOS extends StatefulWidget {
   const PantallaPOS({super.key});
 
-  /// Despliega la ventana emergente para registrar el dinero recibido y dar la devuelta.
   @override
   State<PantallaPOS> createState() => _PantallaPOSState();
 }
 
 class _PantallaPOSState extends State<PantallaPOS> {
-  // Variable local para que la búsqueda solo afecte al POS
   String _busquedaPOS = '';
 
   void _mostrarVentanaCobro(BuildContext context) {
     final posProvider = Provider.of<PosProvider>(context, listen: false);
     final inventarioProvider = Provider.of<InventarioProvider>(
+      context,
+      listen: false,
+    );
+    final clientesProvider = Provider.of<ClientesProvider>(
       context,
       listen: false,
     );
@@ -37,6 +39,8 @@ class _PantallaPOSState extends State<PantallaPOS> {
 
     final TextEditingController pagoController = TextEditingController();
     int cambio = 0;
+    String metodoPago = 'EFECTIVO';
+    String? clienteSeleccionadoId;
 
     showDialog(
       context: context,
@@ -52,45 +56,94 @@ class _PantallaPOSState extends State<PantallaPOS> {
                   Text('Finalizar Venta'),
                 ],
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'TOTAL: \$${posProvider.totalPagar}',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
+              content: SizedBox(
+                width: 400, // Ancho definido para evitar desbordamientos
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'TOTAL: \$${posProvider.totalPagar}',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(height: 15),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 8.0,
+                        children: [
+                          ChoiceChip(
+                            label: const Text('💵 Efectivo'),
+                            selected: metodoPago == 'EFECTIVO',
+                            onSelected: (val) {
+                              if (val)
+                                setStateModal(() => metodoPago = 'EFECTIVO');
+                            },
+                          ),
+                          ChoiceChip(
+                            label: const Text('📋 Fiado / Crédito'),
+                            selected: metodoPago == 'FIADO',
+                            onSelected: (val) {
+                              if (val)
+                                setStateModal(() => metodoPago = 'FIADO');
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      if (metodoPago == 'EFECTIVO') ...[
+                        TextField(
+                          controller: pagoController,
+                          keyboardType: TextInputType.number,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Efectivo recibido',
+                            prefixText: '\$ ',
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (valor) {
+                            int recibido = int.tryParse(valor) ?? 0;
+                            setStateModal(() {
+                              cambio = recibido - posProvider.totalPagar;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 15),
+                        Text(
+                          'Devuelta: \$${cambio < 0 ? 0 : cambio}',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: cambio < 0 ? Colors.red : Colors.blue,
+                          ),
+                        ),
+                      ] else ...[
+                        DropdownButtonFormField<String>(
+                          value: clienteSeleccionadoId,
+                          hint: const Text('Seleccionar Cliente'),
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                          ),
+                          items: clientesProvider.clientes.map((c) {
+                            return DropdownMenuItem(
+                              value: c.id,
+                              child: Text(
+                                '${c.nombre} (Deuda: \$${c.saldoDeuda})',
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setStateModal(() => clienteSeleccionadoId = val);
+                          },
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: pagoController,
-                    keyboardType: TextInputType.number,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Efectivo recibido',
-                      prefixText: '\$ ',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (valor) {
-                      int recibido = int.tryParse(valor) ?? 0;
-                      setStateModal(() {
-                        cambio = recibido - posProvider.totalPagar;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Devuelta: \$${cambio < 0 ? 0 : cambio}',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: cambio < 0 ? Colors.red : Colors.blue,
-                    ),
-                  ),
-                ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -105,9 +158,34 @@ class _PantallaPOSState extends State<PantallaPOS> {
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                   ),
-                  onPressed: cambio < 0 || pagoController.text.isEmpty
+                  onPressed:
+                      (metodoPago == 'EFECTIVO' &&
+                              (cambio < 0 || pagoController.text.isEmpty)) ||
+                          (metodoPago == 'FIADO' &&
+                              clienteSeleccionadoId == null)
                       ? null
-                      : () {
+                      : () async {
+                          if (metodoPago == 'FIADO') {
+                            bool exito = await clientesProvider.registrarFiado(
+                              clienteSeleccionadoId!,
+                              posProvider.totalPagar,
+                            );
+
+                            if (!exito) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      '❌ La compra supera el límite de crédito del cliente.',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                              return;
+                            }
+                          }
+
                           for (var item in posProvider.carrito) {
                             inventarioProvider.descontarStock(
                               item.idProducto,
@@ -116,15 +194,17 @@ class _PantallaPOSState extends State<PantallaPOS> {
                           }
 
                           posProvider.vaciarCarrito();
-                          Navigator.pop(contextoDialogo);
+                          if (context.mounted) Navigator.pop(contextoDialogo);
 
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
+                            SnackBar(
                               content: Text(
-                                '✅ ¡Venta registrada y stock actualizado!',
+                                metodoPago == 'EFECTIVO'
+                                    ? '✅ ¡Venta registrada con éxito!'
+                                    : '📋 ¡Compra a crédito registrada correctamente!',
                               ),
                               backgroundColor: Colors.green,
-                              duration: Duration(seconds: 2),
+                              duration: const Duration(seconds: 2),
                             ),
                           );
                         },
@@ -140,14 +220,10 @@ class _PantallaPOSState extends State<PantallaPOS> {
 
   @override
   Widget build(BuildContext context) {
-    // Escuchamos los cambios en el estado del POS
     final posProvider = Provider.of<PosProvider>(context);
     final inventarioProvider = Provider.of<InventarioProvider>(context);
-
-    // 1. Obtenemos TODOS los productos sin usar los filtros globales de la pantalla de inventario
     final todosLosProductos = inventarioProvider.todosLosProductos;
 
-    // 2. Filtramos ÚNICAMENTE según lo que el cajero escribe en el buscador del POS
     final productosFiltradosPOS = todosLosProductos.where((p) {
       final texto = _busquedaPOS.toLowerCase();
       return p.nombre.toLowerCase().contains(texto) ||
@@ -156,9 +232,6 @@ class _PantallaPOSState extends State<PantallaPOS> {
 
     return Row(
       children: [
-        // ==========================================
-        // PANEL IZQUIERDO: Catálogo Dinámico Local
-        // ==========================================
         Container(
           width: 380,
           color: Colors.blue.shade50,
@@ -171,8 +244,6 @@ class _PantallaPOSState extends State<PantallaPOS> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-
-              // Buscador INDEPENDIENTE del POS
               TextField(
                 decoration: const InputDecoration(
                   hintText: 'Buscar por nombre o código...',
@@ -182,15 +253,12 @@ class _PantallaPOSState extends State<PantallaPOS> {
                   fillColor: Colors.white,
                 ),
                 onChanged: (valor) {
-                  // Actualizamos solo el estado de esta pantalla
                   setState(() {
                     _busquedaPOS = valor;
                   });
                 },
               ),
               const SizedBox(height: 16),
-
-              // Grilla filtrada dinámicamente según _busquedaPOS
               Expanded(
                 child: productosFiltradosPOS.isEmpty
                     ? Center(
@@ -287,10 +355,6 @@ class _PantallaPOSState extends State<PantallaPOS> {
             ],
           ),
         ),
-
-        // ==========================================
-        // PANEL DERECHO: Carrito de Compras
-        // ==========================================
         Expanded(
           child: Container(
             color: Colors.white,
@@ -298,7 +362,6 @@ class _PantallaPOSState extends State<PantallaPOS> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Encabezado del Carrito
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -317,8 +380,6 @@ class _PantallaPOSState extends State<PantallaPOS> {
                   ],
                 ),
                 const Divider(height: 30),
-
-                // Lista de Productos Agregados
                 Expanded(
                   child: posProvider.carrito.isEmpty
                       ? const Center(
@@ -331,7 +392,6 @@ class _PantallaPOSState extends State<PantallaPOS> {
                           itemCount: posProvider.carrito.length,
                           itemBuilder: (context, index) {
                             final item = posProvider.carrito[index];
-
                             return ListTile(
                               leading: CircleAvatar(
                                 backgroundColor: Colors.blue.shade100,
@@ -411,8 +471,6 @@ class _PantallaPOSState extends State<PantallaPOS> {
                         ),
                 ),
                 const Divider(height: 30),
-
-                // Resumen de Total y Botón de Cobro
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(

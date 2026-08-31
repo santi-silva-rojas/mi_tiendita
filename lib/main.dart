@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'core/providers/pos_provider.dart';
 import 'core/providers/inventario_provider.dart';
+import 'core/providers/clientes_provider.dart';
 import 'core/widgets/menu_lateral.dart';
 import 'features/pos/screens/pantalla_pos.dart';
 import 'features/dashboard/screens/pantalla_dashboard.dart';
@@ -14,7 +15,6 @@ import 'features/arqueo/screens/pantalla_arqueo.dart';
 import 'features/configuracion/screens/pantalla_configuracion.dart';
 
 void main() {
-  // Inicialización del motor de SQLite para aplicaciones de Escritorio (Windows / Linux / macOS)
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
@@ -27,6 +27,7 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => PosProvider()),
         ChangeNotifierProvider(create: (_) => InventarioProvider()),
+        ChangeNotifierProvider(create: (_) => ClientesProvider()),
       ],
       child: const MiApp(),
     ),
