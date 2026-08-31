@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/cliente.dart';
 import '../models/fiado.dart';
 import '../database/db_helper.dart';
+import 'caja_provider.dart';
 
 class ClientesProvider extends ChangeNotifier {
   List<Cliente> _clientes = [];
@@ -54,17 +55,30 @@ class ClientesProvider extends ChangeNotifier {
     return true;
   }
 
-  Future<void> registrarAbono(String clienteId, int monto) async {
+  Future<bool> registrarAbono(String clienteId, int monto, CajaProvider cajaProvider) async {
+    if (!cajaProvider.cajaAbierta) {
+      return false; // No se pueden recibir abonos si la caja está cerrada
+    }
+
     final index = _clientes.indexWhere((c) => c.id == clienteId);
     if (index != -1) {
       final cliente = _clientes[index];
       cliente.saldoDeuda = (cliente.saldoDeuda - monto).clamp(0, cliente.saldoDeuda);
       await _dbHelper.actualizarCliente(cliente);
+
+      // Registrar automáticament una entrada de efectivo en el arqueo
+      await cajaProvider.registrarMovimiento(
+        'ENTRADA',
+        monto,
+        'Abono a deuda - Cliente: ${cliente.nombre}',
+      );
+
       notifyListeners();
+      return true;
     }
+    return false;
   }
 
-  /// Modifica los datos de un cliente existente y actualiza la base de datos.
   Future<void> editarCliente(Cliente clienteActualizado) async {
     final index = _clientes.indexWhere((c) => c.id == clienteActualizado.id);
     if (index != -1) {

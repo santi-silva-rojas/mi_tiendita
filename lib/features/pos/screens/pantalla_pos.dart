@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/providers/pos_provider.dart';
 import '../../../core/providers/inventario_provider.dart';
 import '../../../core/providers/clientes_provider.dart';
+import '../../../core/providers/caja_provider.dart';
 
 class PantallaPOS extends StatefulWidget {
   const PantallaPOS({super.key});
@@ -16,6 +17,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
 
   void _mostrarVentanaCobro(BuildContext context) {
     final posProvider = Provider.of<PosProvider>(context, listen: false);
+    final cajaProvider = Provider.of<CajaProvider>(context, listen: false);
     final inventarioProvider = Provider.of<InventarioProvider>(
       context,
       listen: false,
@@ -57,7 +59,7 @@ class _PantallaPOSState extends State<PantallaPOS> {
                 ],
               ),
               content: SizedBox(
-                width: 400, // Ancho definido para evitar desbordamientos
+                width: 400,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -192,6 +194,10 @@ class _PantallaPOSState extends State<PantallaPOS> {
                               item.cantidad,
                             );
                           }
+                          await cajaProvider.registrarVenta(
+                            posProvider.totalPagar,
+                            metodoPago,
+                          );
 
                           posProvider.vaciarCarrito();
                           if (context.mounted) Navigator.pop(contextoDialogo);
@@ -220,6 +226,30 @@ class _PantallaPOSState extends State<PantallaPOS> {
 
   @override
   Widget build(BuildContext context) {
+    final cajaProvider = Provider.of<CajaProvider>(context);
+
+    // Si la caja está cerrada, bloquear interfaz del POS
+    if (!cajaProvider.cajaAbierta) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_clock, size: 80, color: Colors.orange),
+            const SizedBox(height: 16),
+            const Text(
+              'La caja registradora se encuentra cerrada',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Debes realizar la apertura de caja en la sección de Arqueo para continuar.',
+              style: TextStyle(color: Colors.grey, fontSize: 16),
+            ),
+          ],
+        ),
+      );
+    }
+
     final posProvider = Provider.of<PosProvider>(context);
     final inventarioProvider = Provider.of<InventarioProvider>(context);
     final todosLosProductos = inventarioProvider.todosLosProductos;

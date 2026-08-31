@@ -3,6 +3,9 @@ import 'package:sqflite/sqflite.dart';
 import '../models/producto.dart';
 import '../models/cliente.dart';
 import '../models/fiado.dart';
+import '../models/venta.dart';
+import '../models/movimiento_caja.dart';
+import '../models/cierre_caja.dart';
 
 class DBHelper {
   static final DBHelper _instance = DBHelper._internal();
@@ -21,11 +24,14 @@ class DBHelper {
     String path = join(await getDatabasesPath(), 'tiendita.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _crearTablasClientes(db);
+        }
+        if (oldVersion < 3) {
+          await _crearTablasArqueo(db);
         }
       },
     );
@@ -44,6 +50,7 @@ class DBHelper {
       )
     ''');
     await _crearTablasClientes(db);
+    await _crearTablasArqueo(db);
   }
 
   Future<void> _crearTablasClientes(Database db) async {
@@ -65,6 +72,42 @@ class DBHelper {
         total INTEGER,
         fecha TEXT,
         estado TEXT
+      )
+    ''');
+  }
+
+  Future<void> _crearTablasArqueo(Database db) async {
+    await db.execute('''
+      CREATE TABLE ventas(
+        id TEXT PRIMARY KEY,
+        total INTEGER,
+        metodoPago TEXT,
+        fecha TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE movimientos_caja(
+        id TEXT PRIMARY KEY,
+        tipo TEXT,
+        monto INTEGER,
+        motivo TEXT,
+        fecha TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE cierres_caja(
+        id TEXT PRIMARY KEY,
+        fecha TEXT,
+        baseInicial INTEGER,
+        ventasEfectivo INTEGER,
+        ventasFiado INTEGER,
+        entradas INTEGER,
+        salidas INTEGER,
+        totalEsperado INTEGER,
+        totalReportado INTEGER,
+        diferencia INTEGER
       )
     ''');
   }
@@ -117,5 +160,39 @@ class DBHelper {
   Future<int> insertarFiado(Fiado fiado) async {
     final db = await database;
     return await db.insert('fiados', fiado.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  // --- MÉTODOS VENTAS Y CAJA ---
+  Future<List<Venta>> obtenerVentas() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('ventas');
+    return List.generate(maps.length, (i) => Venta.fromMap(maps[i]));
+  }
+
+  Future<int> insertarVenta(Venta venta) async {
+    final db = await database;
+    return await db.insert('ventas', venta.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<MovimientoCaja>> obtenerMovimientos() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('movimientos_caja');
+    return List.generate(maps.length, (i) => MovimientoCaja.fromMap(maps[i]));
+  }
+
+  Future<int> insertarMovimiento(MovimientoCaja movimiento) async {
+    final db = await database;
+    return await db.insert('movimientos_caja', movimiento.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<CierreCaja>> obtenerCierres() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('cierres_caja');
+    return List.generate(maps.length, (i) => CierreCaja.fromMap(maps[i]));
+  }
+
+  Future<int> insertarCierre(CierreCaja cierre) async {
+    final db = await database;
+    return await db.insert('cierres_caja', cierre.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 }

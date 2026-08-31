@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/clientes_provider.dart';
+import '../../../core/providers/caja_provider.dart';
 import '../../../core/models/cliente.dart';
 
 class PantallaFiados extends StatelessWidget {
@@ -122,11 +123,32 @@ class PantallaFiados extends StatelessWidget {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final monto = int.tryParse(abonoCtrl.text) ?? 0;
               if (monto > 0) {
-                Provider.of<ClientesProvider>(context, listen: false).registrarAbono(cliente.id, monto);
-                Navigator.pop(ctx);
+                final cajaProvider = Provider.of<CajaProvider>(context, listen: false);
+                final clientesProvider = Provider.of<ClientesProvider>(context, listen: false);
+
+                bool exito = await clientesProvider.registrarAbono(cliente.id, monto, cajaProvider);
+
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  if (!exito) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('⚠️ No se puede registrar abono: La caja se encuentra cerrada.'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('✅ Abono registrado y entrada de caja creada.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                }
               }
             },
             child: const Text('Registrar Abono'),

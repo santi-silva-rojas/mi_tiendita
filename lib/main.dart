@@ -6,6 +6,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/providers/pos_provider.dart';
 import 'core/providers/inventario_provider.dart';
 import 'core/providers/clientes_provider.dart';
+import 'core/providers/caja_provider.dart';
 import 'core/widgets/menu_lateral.dart';
 import 'features/pos/screens/pantalla_pos.dart';
 import 'features/dashboard/screens/pantalla_dashboard.dart';
@@ -28,6 +29,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => PosProvider()),
         ChangeNotifierProvider(create: (_) => InventarioProvider()),
         ChangeNotifierProvider(create: (_) => ClientesProvider()),
+        ChangeNotifierProvider(create: (_) => CajaProvider()),
       ],
       child: const MiApp(),
     ),
