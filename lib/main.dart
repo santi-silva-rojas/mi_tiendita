@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'core/providers/pos_provider.dart';
 import 'core/providers/inventario_provider.dart';
@@ -12,6 +14,14 @@ import 'features/arqueo/screens/pantalla_arqueo.dart';
 import 'features/configuracion/screens/pantalla_configuracion.dart';
 
 void main() {
+  // Inicialización del motor de SQLite para aplicaciones de Escritorio (Windows / Linux / macOS)
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
+  WidgetsFlutterBinding.ensureInitialized();
+
   runApp(
     MultiProvider(
       providers: [
@@ -65,7 +75,7 @@ class _ContenedorPrincipalState extends State<ContenedorPrincipal> {
             onOpcionSeleccionada: (nuevoIndice) {
               setState(() {
                 _indiceSeleccionado = nuevoIndice;
-              }); 
+              });
             },
           ),
           Expanded(
