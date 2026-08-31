@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
+import '../models/producto.dart';
 
-/// Modelo básico para representar un ítem dentro del carrito de compras.
+/// Modelo para representar un ítem dentro del carrito de compras.
 class ItemCarrito {
+  final String idProducto;
   final String nombre;
   final int precio;
   int cantidad;
+  int stockDisponible;
 
   ItemCarrito({
+    required this.idProducto,
     required this.nombre,
     required this.precio,
+    required this.stockDisponible,
     this.cantidad = 1,
   });
 
@@ -40,22 +45,42 @@ class PosProvider extends ChangeNotifier {
     return total;
   }
 
-  /// Agrega un producto al carrito o incrementa la cantidad si ya existe.
-  void agregarProducto(String nombre, int precio) {
-    int index = _carrito.indexWhere((item) => item.nombre == nombre);
+  /// Agrega un Producto real al carrito validando stock disponible
+  bool agregarProducto(Producto producto) {
+    if (producto.stock <= 0) return false;
+
+    int index = _carrito.indexWhere((item) => item.idProducto == producto.id);
 
     if (index != -1) {
-      _carrito[index].cantidad += 1;
+      if (_carrito[index].cantidad < producto.stock) {
+        _carrito[index].cantidad += 1;
+        _carrito[index].stockDisponible = producto.stock;
+        notifyListeners();
+        return true;
+      }
+      return false; // No hay suficiente stock para sumar más
     } else {
-      _carrito.add(ItemCarrito(nombre: nombre, precio: precio));
+      _carrito.add(
+        ItemCarrito(
+          idProducto: producto.id,
+          nombre: producto.nombre,
+          precio: producto.precioVenta,
+          stockDisponible: producto.stock,
+        ),
+      );
+      notifyListeners();
+      return true;
     }
-    notifyListeners();
   }
 
-  /// Incrementa en 1 la cantidad de un ítem según su índice.
-  void aumentarCantidad(int index) {
-    _carrito[index].cantidad += 1;
-    notifyListeners();
+  /// Incrementa en 1 la cantidad validando el stock disponible
+  bool aumentarCantidad(int index) {
+    if (_carrito[index].cantidad < _carrito[index].stockDisponible) {
+      _carrito[index].cantidad += 1;
+      notifyListeners();
+      return true;
+    }
+    return false;
   }
 
   /// Disminuye en 1 la cantidad o remueve el ítem si llega a 0.

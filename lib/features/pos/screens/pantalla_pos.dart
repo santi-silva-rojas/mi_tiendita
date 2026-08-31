@@ -1,14 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/pos_provider.dart';
+import '../../../core/providers/inventario_provider.dart';
 
 /// Vista principal del Punto de Venta (POS) utilizando Provider para gestión de estado.
-class PantallaPOS extends StatelessWidget {
+class PantallaPOS extends StatefulWidget {
   const PantallaPOS({super.key});
 
   /// Despliega la ventana emergente para registrar el dinero recibido y dar la devuelta.
+  @override
+  State<PantallaPOS> createState() => _PantallaPOSState();
+}
+
+class _PantallaPOSState extends State<PantallaPOS> {
+  // Variable local para que la búsqueda solo afecte al POS
+  String _busquedaPOS = '';
+
   void _mostrarVentanaCobro(BuildContext context) {
     final posProvider = Provider.of<PosProvider>(context, listen: false);
+    final inventarioProvider = Provider.of<InventarioProvider>(
+      context,
+      listen: false,
+    );
 
     if (posProvider.carrito.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -81,9 +94,7 @@ class PantallaPOS extends StatelessWidget {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(contextoDialogo);
-                  },
+                  onPressed: () => Navigator.pop(contextoDialogo),
                   child: const Text(
                     'CANCELAR',
                     style: TextStyle(color: Colors.grey),
@@ -97,12 +108,21 @@ class PantallaPOS extends StatelessWidget {
                   onPressed: cambio < 0 || pagoController.text.isEmpty
                       ? null
                       : () {
-                          Navigator.pop(contextoDialogo);
+                          for (var item in posProvider.carrito) {
+                            inventarioProvider.descontarStock(
+                              item.idProducto,
+                              item.cantidad,
+                            );
+                          }
+
                           posProvider.vaciarCarrito();
+                          Navigator.pop(contextoDialogo);
 
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('✅ ¡Venta registrada con éxito!'),
+                              content: Text(
+                                '✅ ¡Venta registrada y stock actualizado!',
+                              ),
                               backgroundColor: Colors.green,
                               duration: Duration(seconds: 2),
                             ),
@@ -122,14 +142,25 @@ class PantallaPOS extends StatelessWidget {
   Widget build(BuildContext context) {
     // Escuchamos los cambios en el estado del POS
     final posProvider = Provider.of<PosProvider>(context);
+    final inventarioProvider = Provider.of<InventarioProvider>(context);
+
+    // 1. Obtenemos TODOS los productos sin usar los filtros globales de la pantalla de inventario
+    final todosLosProductos = inventarioProvider.todosLosProductos;
+
+    // 2. Filtramos ÚNICAMENTE según lo que el cajero escribe en el buscador del POS
+    final productosFiltradosPOS = todosLosProductos.where((p) {
+      final texto = _busquedaPOS.toLowerCase();
+      return p.nombre.toLowerCase().contains(texto) ||
+          p.codigoBarras.contains(texto);
+    }).toList();
 
     return Row(
       children: [
         // ==========================================
-        // PANEL IZQUIERDO: Catálogo y Búsqueda
+        // PANEL IZQUIERDO: Catálogo Dinámico Local
         // ==========================================
         Container(
-          width: 350,
+          width: 380,
           color: Colors.blue.shade50,
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -140,62 +171,118 @@ class PantallaPOS extends StatelessWidget {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              const TextField(
-                decoration: InputDecoration(
-                  hintText: 'Buscar o escanear código...',
+
+              // Buscador INDEPENDIENTE del POS
+              TextField(
+                decoration: const InputDecoration(
+                  hintText: 'Buscar por nombre o código...',
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
                   filled: true,
                   fillColor: Colors.white,
                 ),
+                onChanged: (valor) {
+                  // Actualizamos solo el estado de esta pantalla
+                  setState(() {
+                    _busquedaPOS = valor;
+                  });
+                },
               ),
-              const SizedBox(height: 20),
-              const Text(
-                'Categorías Rápidas',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 8.0,
-                children: [
-                  ElevatedButton(
-                    onPressed: () => posProvider.agregarProducto('Pan Aliñado', 2000),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+              const SizedBox(height: 16),
+
+              // Grilla filtrada dinámicamente según _busquedaPOS
+              Expanded(
+                child: productosFiltradosPOS.isEmpty
+                    ? Center(
+                        child: todosLosProductos.isEmpty
+                            ? const Text('No hay productos cargados')
+                            : const Text(
+                                'No se encontraron resultados para la búsqueda',
+                              ),
+                      )
+                    : GridView.builder(
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 1.1,
+                              crossAxisSpacing: 10,
+                              mainAxisSpacing: 10,
+                            ),
+                        itemCount: productosFiltradosPOS.length,
+                        itemBuilder: (context, index) {
+                          final prod = productosFiltradosPOS[index];
+                          final sinStock = prod.stock <= 0;
+
+                          return InkWell(
+                            onTap: sinStock
+                                ? null
+                                : () {
+                                    bool agregado = posProvider.agregarProducto(
+                                      prod,
+                                    );
+                                    if (!agregado) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '⚠️ Alcanzaste el límite de stock disponible de ${prod.nombre}',
+                                          ),
+                                          backgroundColor: Colors.orange,
+                                          duration: const Duration(seconds: 1),
+                                        ),
+                                      );
+                                    }
+                                  },
+                            child: Card(
+                              color: sinStock
+                                  ? Colors.grey.shade300
+                                  : Colors.white,
+                              elevation: 2,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      prod.nombre,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: sinStock
+                                            ? Colors.grey
+                                            : Colors.black,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '\$${prod.precioVenta}',
+                                      style: const TextStyle(
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      sinStock
+                                          ? '¡Agotado!'
+                                          : 'Stock: ${prod.stock}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: sinStock
+                                            ? Colors.red
+                                            : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                    child: const Text('🍞 Pan Aliñado\n2.000'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => posProvider.agregarProducto('Huevo AA', 600),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    child: const Text('🥚 Huevo AA\n600'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => posProvider.agregarProducto('Gaseosa 1.5L', 5000),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
-                    child: const Text('🥤 Gaseosa 1.5L\n5.000'),
-                  ),
-                ],
               ),
             ],
           ),
@@ -224,10 +311,7 @@ class PantallaPOS extends StatelessWidget {
                     ),
                     IconButton(
                       onPressed: posProvider.vaciarCarrito,
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        color: Colors.red,
-                      ),
+                      icon: const Icon(Icons.delete_outline, color: Colors.red),
                       tooltip: 'Vaciar Carrito',
                     ),
                   ],
@@ -240,16 +324,13 @@ class PantallaPOS extends StatelessWidget {
                       ? const Center(
                           child: Text(
                             'No hay productos en la venta actual',
-                            style: TextStyle(
-                              color: Colors.grey,
-                              fontSize: 16,
-                            ),
+                            style: TextStyle(color: Colors.grey, fontSize: 16),
                           ),
                         )
                       : ListView.builder(
                           itemCount: posProvider.carrito.length,
                           itemBuilder: (context, index) {
-                            final producto = posProvider.carrito[index];
+                            final item = posProvider.carrito[index];
 
                             return ListTile(
                               leading: CircleAvatar(
@@ -257,13 +338,13 @@ class PantallaPOS extends StatelessWidget {
                                 child: Text('${index + 1}'),
                               ),
                               title: Text(
-                                producto.nombre,
+                                item.nombre,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
                               subtitle: Text(
-                                '\$${producto.precio} x ${producto.cantidad}',
+                                '\$${item.precio} x ${item.cantidad}',
                               ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -273,10 +354,11 @@ class PantallaPOS extends StatelessWidget {
                                       Icons.remove_circle_outline,
                                       color: Colors.orange,
                                     ),
-                                    onPressed: () => posProvider.disminuirCantidad(index),
+                                    onPressed: () =>
+                                        posProvider.disminuirCantidad(index),
                                   ),
                                   Text(
-                                    '${producto.cantidad}',
+                                    '${item.cantidad}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
@@ -287,11 +369,28 @@ class PantallaPOS extends StatelessWidget {
                                       Icons.add_circle_outline,
                                       color: Colors.green,
                                     ),
-                                    onPressed: () => posProvider.aumentarCantidad(index),
+                                    onPressed: () {
+                                      bool pudo = posProvider.aumentarCantidad(
+                                        index,
+                                      );
+                                      if (!pudo) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              '⚠️ No hay más stock disponible.',
+                                            ),
+                                            backgroundColor: Colors.orange,
+                                            duration: Duration(seconds: 1),
+                                          ),
+                                        );
+                                      }
+                                    },
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    '\$${producto.subtotal}',
+                                    '\$${item.subtotal}',
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
@@ -302,7 +401,8 @@ class PantallaPOS extends StatelessWidget {
                                       Icons.delete,
                                       color: Colors.redAccent,
                                     ),
-                                    onPressed: () => posProvider.eliminarProducto(index),
+                                    onPressed: () =>
+                                        posProvider.eliminarProducto(index),
                                   ),
                                 ],
                               ),

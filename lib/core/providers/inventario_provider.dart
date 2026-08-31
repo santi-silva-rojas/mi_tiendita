@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/producto.dart';
 
 class InventarioProvider extends ChangeNotifier {
-  // Lista principal de productos (Simulada para prueba inicial)
+  // Lista principal de productos
   final List<Producto> _productos = [
     Producto(
       id: '1',
@@ -120,4 +120,43 @@ class InventarioProvider extends ChangeNotifier {
     _productos.removeWhere((p) => p.id == id);
     notifyListeners();
   }
+
+  // ==========================================
+  // MÉTODOS PARA CONEXIÓN CON EL POS
+  // ==========================================
+
+  /// Descuenta la cantidad vendida del stock de un producto
+  void descontarStock(String idProducto, int cantidadVendida) {
+    final index = _productos.indexWhere((p) => p.id == idProducto);
+    if (index != -1) {
+      final actual = _productos[index];
+      final nuevoStock = (actual.stock - cantidadVendida).clamp(
+        0,
+        actual.stock,
+      );
+
+      _productos[index] = Producto(
+        id: actual.id,
+        codigoBarras: actual.codigoBarras,
+        nombre: actual.nombre,
+        categoria: actual.categoria,
+        precioCosto: actual.precioCosto,
+        precioVenta: actual.precioVenta,
+        stock: nuevoStock,
+      );
+      notifyListeners();
+    }
+  }
+
+  /// Retorna un producto por su ID
+  Producto? obtenerPorId(String id) {
+    try {
+      return _productos.firstWhere((p) => p.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Retorna TODOS los productos sin aplicar los filtros globales del inventario
+  List<Producto> get todosLosProductos => List.unmodifiable(_productos);
 }
