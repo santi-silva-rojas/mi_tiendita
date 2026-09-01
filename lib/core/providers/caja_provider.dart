@@ -7,7 +7,8 @@ import '../database/db_helper.dart';
 class CajaProvider extends ChangeNotifier {
   final DBHelper _dbHelper = DBHelper();
 
-  List<Venta> _ventas = [];
+  List<Venta> _ventasTurno = [];
+  List<Venta> _historicoVentas = [];
   List<MovimientoCaja> _movimientos = [];
   List<CierreCaja> _cierres = [];
 
@@ -21,18 +22,20 @@ class CajaProvider extends ChangeNotifier {
   bool get cajaAbierta => _cajaAbierta;
   int get baseInicial => _baseInicial;
 
-  List<Venta> get ventas => List.unmodifiable(_ventas);
+  List<Venta> get ventasTurno => List.unmodifiable(_ventasTurno);
+  List<Venta> get historicoVentas => List.unmodifiable(_historicoVentas);
   List<MovimientoCaja> get movimientos => List.unmodifiable(_movimientos);
   List<CierreCaja> get cierres => List.unmodifiable(_cierres);
 
+  // --- Métricas del Turno Actual ---
   int get totalVentasEfectivo {
-    return _ventas
+    return _ventasTurno
         .where((v) => v.metodoPago == 'EFECTIVO')
         .fold(0, (sum, item) => sum + item.total);
   }
 
   int get totalVentasFiado {
-    return _ventas
+    return _ventasTurno
         .where((v) => v.metodoPago == 'FIADO')
         .fold(0, (sum, item) => sum + item.total);
   }
@@ -54,15 +57,38 @@ class CajaProvider extends ChangeNotifier {
     return _baseInicial + totalVentasEfectivo + totalEntradas - totalSalidas;
   }
 
+  // --- Métricas Globales / Dashboard ---
+  int get totalVentasHistorico {
+    return _historicoVentas.fold(0, (sum, item) => sum + item.total);
+  }
+
+  int get totalEfectivoHistorico {
+    return _historicoVentas
+        .where((v) => v.metodoPago == 'EFECTIVO')
+        .fold(0, (sum, item) => sum + item.total);
+  }
+
+  int get totalFiadoHistorico {
+    return _historicoVentas
+        .where((v) => v.metodoPago == 'FIADO')
+        .fold(0, (sum, item) => sum + item.total);
+  }
+
+  double get ticketPromedio {
+    if (_historicoVentas.isEmpty) return 0;
+    return totalVentasHistorico / _historicoVentas.length;
+  }
+
   Future<void> cargarDatos() async {
     _cierres = await _dbHelper.obtenerCierres();
+    _historicoVentas = await _dbHelper.obtenerVentas();
     notifyListeners();
   }
 
   void abrirCaja(int base) {
     _baseInicial = base;
     _cajaAbierta = true;
-    _ventas = [];
+    _ventasTurno = [];
     _movimientos = [];
     notifyListeners();
   }
@@ -76,8 +102,10 @@ class CajaProvider extends ChangeNotifier {
       metodoPago: metodoPago,
       fecha: DateTime.now().toString().split('.')[0],
     );
+
     await _dbHelper.insertarVenta(nuevaVenta);
-    _ventas.add(nuevaVenta);
+    _ventasTurno.add(nuevaVenta);
+    _historicoVentas.add(nuevaVenta);
     notifyListeners();
   }
 
@@ -117,10 +145,10 @@ class CajaProvider extends ChangeNotifier {
     await _dbHelper.insertarCierre(cierre);
     _cierres.add(cierre);
 
-    // Reiniciar valores a cero
+    // Reiniciar turno activo manteniendo el historial persistido
     _cajaAbierta = false;
     _baseInicial = 0;
-    _ventas = [];
+    _ventasTurno = [];
     _movimientos = [];
 
     notifyListeners();
